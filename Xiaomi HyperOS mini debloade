@@ -1,0 +1,91 @@
+#!/bin/bash
+
+# Liste der sicher zu entfernenden Werbe- und Tracking-Bloatware (Paketnamen)
+PACKAGES=(
+  "com.miui.msa.global"          # MIUI System Ads
+  "com.miui.analytics"           # Mi Analytik
+  "com.xiaomi.adservice"         # Xiaomi Ad Services
+  "com.facebook.appmanager"      # FacebookAppManager
+  "com.facebook.services"        # FacebookService
+  "com.miui.mipicks"             # Miui AD loader
+  "com.mi.globalbrowser"         # Mi Browser
+  "com.miui.videoplayer"         # Miui Player
+)
+
+# Überprüfen, ob ADB installiert ist
+if ! command -v adb &> /dev/null
+then
+    echo "ADB wurde nicht gefunden. Bitte installiere ADB, um fortzufahren."
+    exit 1
+fi
+
+# Funktion zum Überprüfen, ob ADB verbunden ist
+check_adb_connection() {
+  devices=$(adb devices | grep "device$")
+  if [[ -z "$devices" ]]; then
+    echo "Keine ADB-Verbindung gefunden. Stelle sicher, dass dein Gerät im USB-Debugging-Modus verbunden ist."
+    exit 1
+  fi
+}
+
+# Funktion zum Überprüfen, ob das Gerät gerootet ist
+check_root_access() {
+  root_check=$(adb shell whoami | grep "root")
+  if [[ -z "$root_check" ]]; then
+    echo "Kein Root-Zugriff. Das Skript funktioniert nur im Benutzermodus, root ist nicht erforderlich."
+    return 0
+  else
+    echo "Achtung: Root-Zugriff entdeckt. Für das sichere Entfernen von Bloatware ist root nicht erforderlich."
+    return 1
+  fi
+}
+
+# Funktion zum Überprüfen, ob ein Paket deinstalliert werden kann
+can_uninstall() {
+  PACKAGE=$1
+  result=$(adb shell pm list packages | grep "$PACKAGE")
+  if [[ -n "$result" ]]; then
+    echo "Paket $PACKAGE ist installiert und kann entfernt werden."
+    return 0
+  else
+    echo "Paket $PACKAGE ist nicht installiert oder kann nicht entfernt werden."
+    return 1
+  fi
+}
+
+# Überprüfung der ADB-Verbindung
+check_adb_connection
+
+# Root-Check, um sicherzustellen, dass das Skript im sicheren Modus bleibt
+check_root_access
+
+# Bestätigung vom Benutzer einholen
+echo "Die folgenden Pakete werden entfernt: ${PACKAGES[@]}"
+read -p "Möchtest du fortfahren? (j/n): " answer
+if [[ "$answer" != "j" ]]; then
+  echo "Abbruch!"
+  exit 0
+fi
+
+echo "Entfernung von Werbe- und Tracking-Bloatware startet..."
+
+# Überprüfen und Entfernen der Werbe- und Tracking-Pakete
+for PACKAGE in "${PACKAGES[@]}"; do
+  echo "Überprüfe $PACKAGE..."
+  
+  if can_uninstall $PACKAGE; then
+    echo "Entferne $PACKAGE ..."
+    
+    # Führe den Deinstallationsbefehl aus und prüfe den Erfolg
+    adb shell pm uninstall --user 0 $PACKAGE
+    if [[ $? -eq 0 ]]; then
+      echo "$PACKAGE erfolgreich entfernt."
+    else
+      echo "Fehler beim Entfernen von $PACKAGE. Überprüfe, ob das Paket deinstalliert werden kann."
+    fi
+  else
+    echo "$PACKAGE wird übersprungen."
+  fi
+done
+
+echo "Werbe- und Tracking-Bloatware erfolgreich entfernt!"
